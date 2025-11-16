@@ -1,17 +1,15 @@
 package main;
 
-import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.RenderingHints;
 
 import javax.swing.JPanel;
 
 public class GamePanel extends JPanel implements Runnable {
-    public static final int WIDTH = 900;
+    public static final int WIDTH = 600;
     public static final int HEIGHT = 600;
     final int FPS = 60; // frame per sec??
     Thread gameThread;
@@ -19,11 +17,20 @@ public class GamePanel extends JPanel implements Runnable {
     Mouse mouse = new Mouse();
 
     // STATE BOARD
-    // initial state : all empty, 'x', 'o'
     char[][] stboard = new char[board.MAX_ROW][board.MAX_COL];
 
     // BLOCKS
     ChosenBlock chosenB = null;
+
+    // PLAYERS
+    public static final char PLAYER = 'x';
+    public static final char MACHINE = 'o';
+    public static final char BLANK = '_';
+
+    // TARGET POINT
+    final int PLAYER_WIN = 10;
+    final int MACHINE_WIN = -10;
+    final int DRAW = 0;
 
     // WINNER
     String result; // You win!, draw, You lose!
@@ -45,9 +52,13 @@ public class GamePanel extends JPanel implements Runnable {
     public void setStartBoard() {
         for (int row=0; row<stboard.length; row++) {
             for (int col=0; col<stboard[0].length; col++) {
-                stboard[row][col] = '_';
+                stboard[row][col] = BLANK;
             }
         }
+    }
+
+    public void setBoard(char[][] board) {
+        stboard = board;
     }
 
     public void launchGame() {
@@ -84,9 +95,9 @@ public class GamePanel extends JPanel implements Runnable {
                 
                 // MOVE CONFIRMED
                 if (mouse.pressed) {
-                    chosenB = new ChosenBlock(mouse.x / board.SQUARE_SITE, mouse.y / board.SQUARE_SITE);
+                    chosenB = new ChosenBlock(mouse.x / Board.SQUARE_SITE, mouse.y / Board.SQUARE_SITE);
                     if (chosenB.isValid(stboard)) {
-                        stboard[chosenB.row][chosenB.col] = 'x';
+                        stboard[chosenB.row][chosenB.col] = PLAYER;
                         // only change the turn when player finishied his choice
                         changePlayerTurn();
                         gameEnd = checkEndGame(stboard);
@@ -97,7 +108,7 @@ public class GamePanel extends JPanel implements Runnable {
                 // find best move by minimax
                 chosenB = findBestMove();
                 // take the move
-                stboard[chosenB.row][chosenB.col] = 'o';
+                stboard[chosenB.row][chosenB.col] = MACHINE;
                 // change player turn
                 changePlayerTurn();
                 gameEnd = checkEndGame(stboard);
@@ -114,51 +125,61 @@ public class GamePanel extends JPanel implements Runnable {
     public ChosenBlock findBestMove() {
         ChosenBlock best = null;
         int score = 0;
-        int bestScore = Integer.MIN_VALUE;
-        boolean isMaximizer = true; // this is the turn of the machine
+        int bestScore = Integer.MAX_VALUE;
+        boolean isMinimizer = true; // this is the turn of the machine
 
         for (int row =0; row <stboard.length; row++) {
             for (int col=0; col <stboard[0].length; col++) {
-                if (stboard[row][col] == '_') {
+                if (stboard[row][col] == BLANK) {
                     // make simulation
-                    stboard[row][col] = 'o'; // the machine is represented by o
-                    score = minimaxScore(stboard, ! isMaximizer);
-                    if (score > bestScore) {
+                    stboard[row][col] = MACHINE; // the machine is represented by o
+                    score = minimaxScore(stboard, ! isMinimizer);
+                    if (score < bestScore) {
                         bestScore = score;
                         best = new ChosenBlock(col, row);
                     }
                     // restore the status before simulation
-                    stboard[row][col] = '_';
+                    stboard[row][col] = BLANK;
                 }
             }
         }
         return best;
     }
 
-    public int minimaxScore(char[][] stboard, boolean isMaximizer) {
+    public int minimaxScore(char[][] stboard, boolean isMinimizer) {
+        // if no move left, return
+        int score = evaluate(stboard);
+
         if (! isMoveLeft(stboard)) {
-            return evaluate(stboard);
+            return score;
+        }
+        // if one win, return
+        if (score == PLAYER_WIN || score == MACHINE_WIN) {
+            return score;
         }
 
-        int score = 0;
         int bestScore;
-        if (isMaximizer) {
-            bestScore = Integer.MIN_VALUE;
-        } else {
+        if (isMinimizer) {
             bestScore = Integer.MAX_VALUE;
+        } else {
+            bestScore = Integer.MIN_VALUE;
         }
 
         for (int row = 0; row < stboard.length; row++) {
             for (int col = 0; col < stboard[0].length; col ++) {
-                if (stboard[row][col] == '_') {
+                if (stboard[row][col] == BLANK) {
                     // make simulation
-                    stboard[row][col] = 'o';
-                    score = minimaxScore(stboard, ! isMaximizer);
-                    if (score > bestScore) {
-                        bestScore = score;
+                    if (isMinimizer) {
+                        stboard[row][col] = MACHINE;
+                        score = minimaxScore(stboard, ! isMinimizer);
+                        bestScore = (score < bestScore) ? score : bestScore;
+                    } else {
+                        stboard[row][col] = PLAYER;
+                        score = minimaxScore(stboard, ! isMinimizer);
+                        bestScore = (score > bestScore) ? score : bestScore;
                     }
                     // restore the status before simulation
-                    stboard[row][col] = '_';
+                    stboard[row][col] = BLANK;
                 }
             }
         }
@@ -170,36 +191,36 @@ public class GamePanel extends JPanel implements Runnable {
         // checking for 3x or 3o horizontal win
         for (int row =0; row <stboard.length; row ++) {
             if (stboard[row][0] == stboard[row][1] && stboard[row][1] == stboard[row][2]) {
-                if (stboard[row][0] == 'x') {
-                    return 1;
-                } else if (stboard[row][0] == 'o') {
-                    return -1;
+                if (stboard[row][0] == PLAYER) {
+                    return PLAYER_WIN;
+                } else if (stboard[row][0] == MACHINE) {
+                    return MACHINE_WIN;
                 }
             }
         }
         // checking for 3x or 3o vertical win
         for (int col =0; col <stboard[0].length; col ++) {
             if (stboard[0][col] == stboard[1][col] && stboard[1][col] == stboard[2][col]) {
-                if (stboard[0][col] == 'x') {
-                    return 1;
-                } else if (stboard[0][col] == 'o') {
-                    return -1;
+                if (stboard[0][col] == PLAYER) {
+                    return PLAYER_WIN;
+                } else if (stboard[0][col] == MACHINE) {
+                    return MACHINE_WIN;
                 }
             }
         }
         // checking for 3x or 3o diagonal win
         if (stboard[0][0] == stboard[1][1] && stboard[1][1] == stboard[2][2]) {
-            if (stboard[1][1] == 'x') {
-                return 1;
-            } else if (stboard[1][1] == 'o') {
-                return -1;
+            if (stboard[1][1] == PLAYER) {
+                return PLAYER_WIN;
+            } else if (stboard[1][1] == MACHINE) {
+                return MACHINE_WIN;
             }
         }
         if (stboard[2][0] == stboard[1][1] && stboard[1][1] == stboard[0][2]) {
-            if (stboard[1][1] == 'x') {
-                return 1;
-            } else if (stboard[1][1] == 'o') {
-                return -1;
+            if (stboard[1][1] == PLAYER) {
+                return PLAYER_WIN;
+            } else if (stboard[1][1] == MACHINE) {
+                return MACHINE_WIN;
             }
         }
 
@@ -209,7 +230,7 @@ public class GamePanel extends JPanel implements Runnable {
     public boolean isMoveLeft(char[][] stboard) {
         for (int i=0; i<stboard.length; i++) {
             for (int j=0; j<stboard[0].length; j++) {
-                if (stboard[i][j] == '_') {
+                if (stboard[i][j] == BLANK) {
                     return true;
                 }
             }
@@ -221,10 +242,10 @@ public class GamePanel extends JPanel implements Runnable {
     public boolean checkEndGame(char[][] stboard) {
         // TODO: 
         int score = evaluate(stboard);
-        if (score > 0) {
+        if (score < 0) {
             result = "You lose!";
             return true;
-        } else if (score < 0) {
+        } else if (score > 0) {
             result = "You win!";
             return true;
         } else if (! isMoveLeft(stboard)) {
@@ -257,9 +278,14 @@ public class GamePanel extends JPanel implements Runnable {
 
         // ENGDING GAME
         if (gameEnd) {
-            // TODO
+            g2.setFont(new Font("Arial", Font.PLAIN, 90));
+            g2.setColor(Color.PINK);
+            g2.drawString(result, 150, 250);
+
         }
     }
- 
-
+    
+    /*
+     * UNIT TEST
+     */
 }

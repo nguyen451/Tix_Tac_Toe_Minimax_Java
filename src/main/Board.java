@@ -35,12 +35,12 @@ public class Board {
 
     public void drawXO(Graphics2D g2, int row, int col, char status) {
         // if is a empty block: draw nothing
-        if (status == '_') {
+        if (status == GamePanel.BLANK) {
             return;
         }
 
         // drawing x/ o to the block
-        String imgPath = status == 'x' ? "/assets/x.png" : "/assets/o.png";
+        String imgPath = status == GamePanel.PLAYER ? "/assets/x.png" : "/assets/o.png";
         g2.drawImage(getImage(imgPath), getX(col), getY(row), SQUARE_SITE, SQUARE_SITE, null);
     }
 
